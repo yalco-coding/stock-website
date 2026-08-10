@@ -1,0 +1,22 @@
+# 환경변수 및 비밀정보
+.env
+.env.*
+!.env.example
+
+# 의존성 및 빌드 결과
+node_modules/
+dist/
+build/
+
+# 로그 및 도구 캐시
+*.log
+.cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# 편집기 및 운영체제 파일
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
