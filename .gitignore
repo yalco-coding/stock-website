@@ -1,22 +1,42 @@
-# 환경변수 및 비밀정보
-.env
-.env.*
-!.env.example
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# 의존성 및 빌드 결과
-node_modules/
-dist/
-build/
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# 로그 및 도구 캐시
-*.log
-.cache/
-.pytest_cache/
-__pycache__/
-*.py[cod]
+# testing
+/coverage
 
-# 편집기 및 운영체제 파일
-.vscode/
-.idea/
+# next.js
+/.next/
+/.vinext/
+/out/
+
+# misc
 .DS_Store
-Thumbs.db
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+/dist/
+/.wrangler/
+/outputs/
+/work/
+*.tsbuildinfo
+.vite-local.*.log

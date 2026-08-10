@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+:root { color-scheme: light; --ink: #17211d; --muted: #65726b; --line: #dfe7e2; }
+* { box-sizing: border-box; }
+html { background: #eef2ef; }
+body { margin: 0; color: var(--ink); background: #eef2ef; font-family: Arial, Helvetica, sans-serif; }
+button { font: inherit; }
+button:focus-visible { outline: 3px solid #8eb8a3; outline-offset: 2px; }
+.tabular { font-variant-numeric: tabular-nums; }
+.soft-grid { background-image: radial-gradient(#cad6cf 0.7px, transparent 0.7px); background-size: 18px 18px; }
+@media (max-width: 767px) { .mobile-table { min-width: 760px; } }
