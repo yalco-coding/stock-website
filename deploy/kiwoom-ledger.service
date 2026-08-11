@@ -1,0 +1,23 @@
+[Unit]
+Description=Kiwoom Ledger Next.js application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/stock-website
+Environment=NODE_ENV=production
+EnvironmentFile=/home/ubuntu/stock-website/.env
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+
+# Basic service hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/stock-website
+
+[Install]
+WantedBy=multi-user.target
