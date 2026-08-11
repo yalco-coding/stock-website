@@ -13,9 +13,16 @@ function clientId(request: NextRequest): string {
 
 function sameOrigin(request: NextRequest): boolean {
   const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite && !["same-origin", "none"].includes(fetchSite)) return false;
+  if (fetchSite) return ["same-origin", "none"].includes(fetchSite);
+
   const origin = request.headers.get("origin");
-  return !origin || origin === request.nextUrl.origin;
+  if (!origin) return true;
+
+  const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+    || request.headers.get("host")?.trim();
+  const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim()
+    || request.nextUrl.protocol.replace(":", "");
+  return Boolean(host) && origin === `${protocol}://${host}`;
 }
 
 export async function POST(request: NextRequest) {

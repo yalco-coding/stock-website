@@ -51,6 +51,8 @@ test("protects pages and APIs with a signed, expiring secure session", async () 
   assert.match(login, /sameSite: "strict"/);
   assert.match(login, /secure: process\.env\.NODE_ENV === "production"/);
   assert.match(login, /status: 503/);
+  assert.match(login, /x-forwarded-host/);
+  assert.match(login, /x-forwarded-proto/);
   assert.match(loginForm, /content-type/);
   assert.doesNotMatch(proxy + auth + login, /KRA_(?:REAL|MOCK).*SECRET/);
 });
