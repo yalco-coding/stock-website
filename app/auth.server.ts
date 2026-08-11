@@ -5,6 +5,11 @@ export const SESSION_TTL_SECONDS = 8 * 60 * 60;
 
 type SessionPayload = { expiresAt: number; nonce: string };
 
+export function isHttpsRequest(request: { headers: Headers; nextUrl: { protocol: string } }): boolean {
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  return (forwardedProtocol || request.nextUrl.protocol.replace(":", "").toLowerCase()) === "https";
+}
+
 function sessionSigningSecret(): string {
   const password = process.env.PASSWORD;
   if (!password) throw new Error("PASSWORD is not configured.");

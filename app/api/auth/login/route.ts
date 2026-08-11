@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSessionToken, safeReturnPath, SESSION_COOKIE, SESSION_TTL_SECONDS, verifyPassword } from "../../../auth.server";
+import { createSessionToken, isHttpsRequest, safeReturnPath, SESSION_COOKIE, SESSION_TTL_SECONDS, verifyPassword } from "../../../auth.server";
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ redirectTo: safeReturnPath(body.next) }, { headers: { "Cache-Control": "no-store" } });
   response.cookies.set(SESSION_COOKIE, sessionToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttpsRequest(request),
     sameSite: "strict",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,

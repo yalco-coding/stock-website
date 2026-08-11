@@ -49,7 +49,8 @@ test("protects pages and APIs with a signed, expiring secure session", async () 
   assert.match(login, /MAX_ATTEMPTS = 5/);
   assert.match(login, /httpOnly: true/);
   assert.match(login, /sameSite: "strict"/);
-  assert.match(login, /secure: process\.env\.NODE_ENV === "production"/);
+  assert.match(auth, /x-forwarded-proto/);
+  assert.match(login, /secure: isHttpsRequest\(request\)/);
   assert.match(login, /status: 503/);
   assert.match(login, /x-forwarded-host/);
   assert.match(login, /x-forwarded-proto/);
