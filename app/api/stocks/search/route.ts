@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMockAccessToken, MOCK_DOMAIN, type MockEnvironment } from "../../kiwoom.server";
 
 export const dynamic = "force-dynamic";
-type Stock = { code: string; name: string; englishName?: string; market: string; industry?: string; isEtf?: boolean };
+type Stock = { code: string; name: string; englishName?: string; market: string; marketCode: string; industry?: string; isEtf?: boolean };
 type CacheEntry = { expiresAt: number; stocks: Stock[] };
 const stockCache = new Map<MockEnvironment, CacheEntry>();
 const MARKET_TYPES = ["0", "10", "8"] as const;
@@ -19,9 +19,9 @@ async function requestList(environment: MockEnvironment, token: string, marketTy
   const body = await response.json() as { return_code?: number; return_msg?: string; list?: Record<string, unknown>[] };
   if (!response.ok || Number(body.return_code ?? 0) !== 0) throw new Error(body.return_msg || "종목 목록을 불러오지 못했습니다.");
   return (body.list ?? []).map((item): Stock => domestic ? {
-    code: String(item.code ?? ""), name: String(item.name ?? ""), market: String(item.marketName ?? ""), industry: String(item.upName ?? "") || undefined, isEtf: marketType === "8",
+    code: String(item.code ?? ""), name: String(item.name ?? ""), market: String(item.marketName ?? ""), marketCode: "KRX", industry: String(item.upName ?? "") || undefined, isEtf: marketType === "8",
   } : {
-    code: String(item.stk_cd ?? ""), name: String(item.stk_nm ?? ""), englishName: String(item.stk_enm ?? "") || undefined, market: String(item.mkgb ?? ""), industry: String(item.upgb ?? "") || undefined, isEtf: item.isEtf === "Y",
+    code: String(item.stk_cd ?? ""), name: String(item.stk_nm ?? ""), englishName: String(item.stk_enm ?? "") || undefined, market: String(item.mkgb ?? ""), marketCode: String(item.stex_tp ?? ""), industry: String(item.upgb ?? "") || undefined, isEtf: item.isEtf === "Y",
   });
 }
 
@@ -39,6 +39,7 @@ async function loadStocks(environment: MockEnvironment) {
   } else {
     stocks = await requestList(environment, token);
   }
+  stocks = [...new Map(stocks.map((stock) => [`${stock.marketCode}:${stock.code}`, stock])).values()];
   stockCache.set(environment, { expiresAt: Date.now() + 10 * 60 * 1000, stocks });
   return stocks;
 }

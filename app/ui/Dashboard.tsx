@@ -4,11 +4,12 @@ import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, BarChart3, BriefcaseBusiness, Building2, ChevronRight, CircleDollarSign, Clock3, Globe2, Landmark, Menu, RefreshCw, Search, ShieldCheck, WalletCards, X } from "lucide-react";
 import { QueryProvider } from "./QueryProvider";
+import { StockTradePanel, type TradableStock } from "./StockTradePanel";
 
 type Environment = "mock-domestic" | "mock-overseas";
-type Position = { code: string; name: string; market?: string; quantity: number; availableQuantity: number; averagePrice: number; currentPrice: number; purchaseAmount: number; evaluationAmount: number; profitLoss: number; returnRate: number };
+type Position = { code: string; name: string; market?: string; marketCode: string; quantity: number; availableQuantity: number; averagePrice: number; currentPrice: number; purchaseAmount: number; evaluationAmount: number; profitLoss: number; returnRate: number };
 type AccountData = { environment: Environment; currency: "KRW" | "USD"; trId: string; totalPurchase: number; totalEvaluation: number; totalProfitLoss: number; totalReturnRate: number; estimatedAssets?: number; cash?: { krwDeposit: number; usdDeposit: number; usdWithdrawable: number; usdOrderable: number }; positions: Position[]; fetchedAt: string };
-type Stock = { code: string; name: string; englishName?: string; market: string; industry?: string; isEtf?: boolean };
+type Stock = TradableStock;
 type SearchData = { category: "domestic" | "overseas"; trId: string; query: string; results: Stock[] };
 
 const money = (value: number, currency: "KRW" | "USD") => new Intl.NumberFormat("ko-KR", { style: "currency", currency, maximumFractionDigits: currency === "KRW" ? 0 : 2 }).format(value);
@@ -42,6 +43,7 @@ function DashboardContent() {
   const [environment, setEnvironment] = useState<Environment>(() => isUsRegularMarketOpen() ? "mock-overseas" : "mock-domestic");
   const [menuOpen, setMenuOpen] = useState(false);
   const [view, setView] = useState<"account" | "search">("account");
+  const [selectedTrade, setSelectedTrade] = useState<{ stock: Stock; mode: "buy" | "sell"; holding?: { quantity: number; availableQuantity: number } } | null>(null);
   const query = useQuery({ queryKey: ["account", environment], queryFn: () => fetchAccount(environment), enabled: view === "account" });
   const label = environment === "mock-domestic" ? "국내 모의투자" : "해외 모의투자";
 
@@ -52,7 +54,7 @@ function DashboardContent() {
         <div className="mr-auto flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-[#173f31] text-white"><Landmark size={19}/></div><div><p className="text-[10px] font-semibold tracking-[.18em] text-emerald-800">KIWOOM LEDGER</p><p className="text-sm font-bold text-slate-800">투자 계좌 대시보드</p></div></div>
         <div className="flex rounded-xl border border-[#d8e1dc] bg-white p-1 shadow-sm" aria-label="투자 환경 선택">
           <button disabled className="hidden rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 sm:block" title="안전을 위해 사용할 수 없습니다">실투자</button>
-          {(["mock-domestic", "mock-overseas"] as const).map((env) => <button key={env} onClick={() => setEnvironment(env)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${environment === env ? "bg-[#173f31] text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"}`}>{env === "mock-domestic" ? "국내 모의" : "해외 모의"}</button>)}
+          {(["mock-domestic", "mock-overseas"] as const).map((env) => <button key={env} onClick={() => { setEnvironment(env); setSelectedTrade(null); }} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${environment === env ? "bg-[#173f31] text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"}`}>{env === "mock-domestic" ? "국내 모의" : "해외 모의"}</button>)}
         </div>
       </div>
     </header>
@@ -68,18 +70,37 @@ function DashboardContent() {
       </aside>
       {menuOpen && <button className="fixed inset-0 z-40 bg-black/25 md:hidden" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기"/>}
       <section className="min-w-0 flex-1 p-4 md:p-8 lg:p-10">
-        {view === "search" ? <StockSearch key={environment} environment={environment}/> : <>
+        {view === "search" ? <StockSearch key={environment} environment={environment} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })}/> : <>
         <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-semibold text-emerald-800"><span className="h-2 w-2 rounded-full bg-emerald-500"/>{label}</div><h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">계좌 현황</h1><p className="mt-2 text-sm text-slate-500">보유 자산의 평가 현황과 수익을 확인하세요.</p></div><button onClick={() => query.refetch()} disabled={query.isFetching} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#cad5cf] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"><RefreshCw size={16} className={query.isFetching ? "animate-spin" : ""}/>{query.isFetching ? "새로고침 중" : "새로고침"}</button></div>
         {query.isLoading && <Loading/>}
         {query.isError && <ErrorState message={query.error.message} retry={() => query.refetch()}/>} 
-        {query.data && <AccountView data={query.data} fetching={query.isFetching}/>} 
+        {query.data && (
+          <AccountView
+            data={query.data}
+            fetching={query.isFetching}
+            onSell={(position) => setSelectedTrade({
+              stock: {
+                code: position.code,
+                name: position.name,
+                market: position.market ?? (environment === "mock-domestic" ? "KRX" : "미국"),
+                marketCode: position.marketCode,
+              },
+              mode: "sell",
+              holding: {
+                quantity: position.quantity,
+                availableQuantity: position.availableQuantity,
+              },
+            })}
+          />
+        )}
         </>}
       </section>
     </div>
+    <StockTradePanel key={`${environment}-${selectedTrade?.mode ?? "closed"}-${selectedTrade?.stock.code ?? ""}`} stock={selectedTrade?.stock ?? null} environment={environment} mode={selectedTrade?.mode} holding={selectedTrade?.holding} onClose={() => setSelectedTrade(null)}/>
   </main>;
 }
 
-function StockSearch({ environment }: { environment: Environment }) {
+function StockSearch({ environment, onSelect }: { environment: Environment; onSelect: (stock: Stock) => void }) {
   const [input, setInput] = useState("");
   const [submitted, setSubmitted] = useState("");
   const searchQuery = useQuery({ queryKey: ["stocks", environment, submitted], queryFn: () => fetchStocks(environment, submitted), enabled: submitted.length > 0 });
@@ -95,7 +116,7 @@ function StockSearch({ environment }: { environment: Environment }) {
       <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row"><label className="relative flex-1"><span className="sr-only">종목명 또는 종목코드</span><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/><input value={input} onChange={(e) => setInput(e.target.value)} placeholder={domestic ? "예: 삼성전자, 005930" : "예: 애플, AAPL"} className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm outline-none transition focus:border-emerald-700 focus:bg-white"/></label><button disabled={!input.trim() || searchQuery.isFetching} className="h-12 rounded-xl bg-[#173f31] px-6 text-sm font-bold text-white disabled:opacity-50">{searchQuery.isFetching ? "검색 중" : "검색"}</button></form>
     </section>
     {searchQuery.isError && <div className="mt-5"><ErrorState message={searchQuery.error.message} retry={() => searchQuery.refetch()}/></div>}
-    {searchQuery.data && <section className="mt-5 overflow-hidden rounded-2xl border border-[#dbe4df] bg-white shadow-[0_8px_24px_rgba(26,55,43,.05)]"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="font-bold text-slate-900">검색 결과</h2><p className="mt-1 text-xs text-slate-500">‘{searchQuery.data.query}’ · {searchQuery.data.results.length}개 · TR {searchQuery.data.trId}</p></div></div>{searchQuery.data.results.length === 0 ? <div className="grid min-h-56 place-items-center p-8 text-center"><div><Search className="mx-auto mb-3 text-slate-300" size={32}/><p className="font-semibold text-slate-600">일치하는 종목이 없습니다</p><p className="mt-1 text-sm text-slate-400">종목명이나 코드를 다시 확인해 주세요.</p></div></div> : <ul className="divide-y divide-slate-100">{searchQuery.data.results.map((stock) => <li key={`${stock.market}-${stock.code}`} className="flex items-center gap-4 px-5 py-4"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#edf3ef] text-emerald-800">{domestic ? <Building2 size={18}/> : <Globe2 size={18}/>}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-slate-800">{stock.name}</p>{stock.isEtf && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">ETF</span>}</div>{stock.englishName && <p className="mt-0.5 truncate text-xs text-slate-400">{stock.englishName}</p>}</div><div className="text-right"><p className="tabular text-sm font-bold text-slate-700">{stock.code}</p><p className="mt-1 text-[11px] text-slate-400">{stock.market}{stock.industry ? ` · ${stock.industry}` : ""}</p></div></li>)}</ul>}</section>}
+    {searchQuery.data && <section className="mt-5 overflow-hidden rounded-2xl border border-[#dbe4df] bg-white shadow-[0_8px_24px_rgba(26,55,43,.05)]"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="font-bold text-slate-900">검색 결과</h2><p className="mt-1 text-xs text-slate-500">‘{searchQuery.data.query}’ · {searchQuery.data.results.length}개 · TR {searchQuery.data.trId}</p></div></div>{searchQuery.data.results.length === 0 ? <div className="grid min-h-56 place-items-center p-8 text-center"><div><Search className="mx-auto mb-3 text-slate-300" size={32}/><p className="font-semibold text-slate-600">일치하는 종목이 없습니다</p><p className="mt-1 text-sm text-slate-400">종목명이나 코드를 다시 확인해 주세요.</p></div></div> : <ul className="divide-y divide-slate-100">{searchQuery.data.results.map((stock, index) => <li key={`${stock.marketCode}-${stock.code}-${index}`}><button onClick={() => onSelect(stock)} className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50 focus:bg-slate-50"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#edf3ef] text-emerald-800">{domestic ? <Building2 size={18}/> : <Globe2 size={18}/>}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-slate-800">{stock.name}</p>{stock.isEtf && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">ETF</span>}</div>{stock.englishName && <p className="mt-0.5 truncate text-xs text-slate-400">{stock.englishName}</p>}</div><div className="text-right"><p className="tabular text-sm font-bold text-slate-700">{stock.code}</p><p className="mt-1 text-[11px] text-slate-400">{stock.market}{stock.industry ? ` · ${stock.industry}` : ""}</p></div><ChevronRight className="shrink-0 text-slate-300" size={17}/></button></li>)}</ul>}</section>}
     {!submitted && <div className="mt-5 grid min-h-56 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white/50 p-8 text-center"><div><Search className="mx-auto mb-3 text-slate-300" size={34}/><p className="font-semibold text-slate-600">검색어를 입력해 주세요</p><p className="mt-1 text-sm text-slate-400">검색 결과는 종목 목록으로만 표시됩니다.</p></div></div>}
   </div>;
 }
@@ -103,7 +124,7 @@ function StockSearch({ environment }: { environment: Environment }) {
 function Loading() { return <div aria-live="polite"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map(i => <div key={i} className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white/80"/>)}</div><div className="mt-5 h-80 animate-pulse rounded-2xl border border-slate-200 bg-white/80"/></div> }
 function ErrorState({ message, retry }: { message: string; retry: () => void }) { return <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><AlertCircle className="mx-auto mb-3 text-amber-600"/><h2 className="font-bold text-slate-800">계좌를 불러올 수 없습니다</h2><p className="mx-auto mt-2 max-w-lg text-sm text-slate-600">{message}</p><button onClick={retry} className="mt-5 rounded-xl bg-[#173f31] px-4 py-2 text-sm font-bold text-white">다시 시도</button></div> }
 
-function AccountView({ data, fetching }: { data: AccountData; fetching: boolean }) {
+function AccountView({ data, fetching, onSell }: { data: AccountData; fetching: boolean; onSell: (position: Position) => void }) {
   const investmentCards = [
     [data.currency === "KRW" ? "추정 자산" : "총 평가금액", money(data.estimatedAssets ?? data.totalEvaluation, data.currency)],
     ["총 매입금액", money(data.totalPurchase, data.currency)],
@@ -121,7 +142,7 @@ function AccountView({ data, fetching }: { data: AccountData; fetching: boolean 
     <div className="mb-3 flex items-center gap-2"><BarChart3 size={17} className="text-emerald-800"/><h2 className="text-sm font-bold text-slate-800">투자 현황</h2></div>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{investmentCards.map(([label, value], index) => <article key={label} className="rounded-2xl border border-[#dbe4df] bg-white p-5 shadow-[0_8px_24px_rgba(26,55,43,.05)]"><div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold text-slate-500">{label}</span><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#edf3ef] text-emerald-800">{index < 2 ? <WalletCards size={15}/> : <BarChart3 size={15}/>}</span></div><p className={`tabular text-xl font-bold tracking-tight ${index > 1 ? tone(index === 2 ? data.totalProfitLoss : data.totalReturnRate) : "text-slate-900"}`}>{value}</p></article>)}</div>
     <section className="mt-5 overflow-hidden rounded-2xl border border-[#dbe4df] bg-white shadow-[0_8px_24px_rgba(26,55,43,.05)]"><div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold text-slate-900">보유 종목</h2><p className="mt-1 text-xs text-slate-500">{data.positions.length}개 종목 · TR {data.trId}</p></div><div className="flex items-center gap-1.5 text-[11px] text-slate-400"><Clock3 size={13}/>{new Date(data.fetchedAt).toLocaleString("ko-KR")} 기준</div></div>
-      {data.positions.length === 0 ? <div className="grid min-h-64 place-items-center p-8 text-center"><div><BriefcaseBusiness className="mx-auto mb-3 text-slate-300" size={32}/><p className="font-semibold text-slate-600">보유 종목이 없습니다</p><p className="mt-1 text-sm text-slate-400">새로고침하면 최신 계좌 상태를 확인합니다.</p></div></div> : <div className="overflow-x-auto"><table className="mobile-table w-full text-left"><thead><tr className="bg-[#f7f9f7] text-[11px] font-bold text-slate-500">{["종목", "보유 수량", "평균 단가", "현재가", "평가금액", "평가손익", "수익률"].map(h => <th key={h} className="px-5 py-3 first:text-left text-right">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.positions.map(p => <tr key={`${p.market}-${p.code}`} className="hover:bg-slate-50/70"><td className="px-5 py-4"><p className="font-bold text-slate-800">{p.name}</p><p className="mt-1 text-[11px] text-slate-400">{p.code}{p.market ? ` · ${p.market}` : ""}</p></td><td className="tabular px-5 py-4 text-right text-sm">{number(p.quantity)}</td><td className="tabular px-5 py-4 text-right text-sm">{money(p.averagePrice, data.currency)}</td><td className="tabular px-5 py-4 text-right text-sm">{money(p.currentPrice, data.currency)}</td><td className="tabular px-5 py-4 text-right text-sm font-semibold">{money(p.evaluationAmount, data.currency)}</td><td className={`tabular px-5 py-4 text-right text-sm font-semibold ${tone(p.profitLoss)}`}>{money(p.profitLoss, data.currency)}</td><td className={`tabular px-5 py-4 text-right text-sm font-bold ${tone(p.returnRate)}`}>{signed(p.returnRate)}</td></tr>)}</tbody></table></div>}
+      {data.positions.length === 0 ? <div className="grid min-h-64 place-items-center p-8 text-center"><div><BriefcaseBusiness className="mx-auto mb-3 text-slate-300" size={32}/><p className="font-semibold text-slate-600">보유 종목이 없습니다</p><p className="mt-1 text-sm text-slate-400">새로고침하면 최신 계좌 상태를 확인합니다.</p></div></div> : <div className="overflow-x-auto"><table className="mobile-table w-full text-left"><thead><tr className="bg-[#f7f9f7] text-[11px] font-bold text-slate-500">{["종목", "보유 수량", "평균 단가", "현재가", "평가금액", "평가손익", "수익률", "거래"].map(h => <th key={h} className="px-5 py-3 first:text-left text-right">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.positions.map(p => <tr key={`${p.market}-${p.code}`} className="hover:bg-slate-50/70"><td className="px-5 py-4"><p className="font-bold text-slate-800">{p.name}</p><p className="mt-1 text-[11px] text-slate-400">{p.code}{p.market ? ` · ${p.market}` : ""}</p></td><td className="tabular px-5 py-4 text-right text-sm">{number(p.quantity)}</td><td className="tabular px-5 py-4 text-right text-sm">{money(p.averagePrice, data.currency)}</td><td className="tabular px-5 py-4 text-right text-sm">{money(p.currentPrice, data.currency)}</td><td className="tabular px-5 py-4 text-right text-sm font-semibold">{money(p.evaluationAmount, data.currency)}</td><td className={`tabular px-5 py-4 text-right text-sm font-semibold ${tone(p.profitLoss)}`}>{money(p.profitLoss, data.currency)}</td><td className={`tabular px-5 py-4 text-right text-sm font-bold ${tone(p.returnRate)}`}>{signed(p.returnRate)}</td><td className="px-5 py-4 text-right"><button onClick={() => onSell(p)} disabled={p.availableQuantity <= 0} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40">매도</button></td></tr>)}</tbody></table></div>}
     </section>
   </div>;
 }
