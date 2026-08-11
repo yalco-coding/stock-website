@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMockAccessToken, MOCK_DOMAIN, type MockEnvironment } from "../../kiwoom.server";
+import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment, type InvestmentEnvironment } from "../../kiwoom.server";
 
 export const dynamic = "force-dynamic";
 type Stock = { code: string; name: string; englishName?: string; market: string; marketCode: string; industry?: string; isEtf?: boolean };
 type CacheEntry = { expiresAt: number; stocks: Stock[] };
-const stockCache = new Map<MockEnvironment, CacheEntry>();
+const stockCache = new Map<InvestmentEnvironment, CacheEntry>();
 const MARKET_TYPES = ["0", "10", "8"] as const;
 
-async function requestList(environment: MockEnvironment, token: string, marketType?: string) {
-  const domestic = environment === "mock-domestic";
+async function requestList(environment: InvestmentEnvironment, token: string, marketType?: string) {
+  const domestic = isDomestic(environment);
   const trId = domestic ? "ka10099" : "usa10099";
-  const response = await fetch(`${MOCK_DOMAIN}${domestic ? "/api/dostk/stkinfo" : "/api/us/stkinfo"}`, {
+  const response = await fetch(`${getApiDomain(environment)}${domestic ? "/api/dostk/stkinfo" : "/api/us/stkinfo"}`, {
     method: "POST",
     headers: { "Content-Type": "application/json;charset=UTF-8", "api-id": trId, authorization: `Bearer ${token}` },
     body: JSON.stringify(domestic ? { mrkt_tp: marketType } : { stex_tp: "%" }),
@@ -25,12 +25,12 @@ async function requestList(environment: MockEnvironment, token: string, marketTy
   });
 }
 
-async function loadStocks(environment: MockEnvironment) {
+async function loadStocks(environment: InvestmentEnvironment) {
   const cached = stockCache.get(environment);
   if (cached && cached.expiresAt > Date.now()) return cached.stocks;
-  const token = await getMockAccessToken(environment);
+  const token = await getAccessToken(environment);
   let stocks: Stock[];
-  if (environment === "mock-domestic") {
+  if (isDomestic(environment)) {
     stocks = [];
     for (const [index, market] of MARKET_TYPES.entries()) {
       if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1_100));
@@ -47,7 +47,7 @@ async function loadStocks(environment: MockEnvironment) {
 export async function GET(request: NextRequest) {
   const environment = request.nextUrl.searchParams.get("environment");
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-  if (environment !== "mock-domestic" && environment !== "mock-overseas") return NextResponse.json({ message: "지원하지 않는 투자 환경입니다." }, { status: 400 });
+  if (!isInvestmentEnvironment(environment)) return NextResponse.json({ message: "지원하지 않는 투자 환경입니다." }, { status: 400 });
   if (!query) return NextResponse.json({ message: "종목명이나 종목코드를 입력해 주세요." }, { status: 400 });
   try {
     const normalized = query.toLocaleLowerCase("ko-KR");
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       return 2;
     };
     const results = (await loadStocks(environment)).filter((stock) => stock.code.toLocaleLowerCase().includes(normalized) || stock.name.toLocaleLowerCase("ko-KR").includes(normalized) || stock.englishName?.toLocaleLowerCase().includes(normalized)).sort((a, b) => rank(a) - rank(b) || a.code.localeCompare(b.code)).slice(0, 50);
-    return NextResponse.json({ category: environment === "mock-domestic" ? "domestic" : "overseas", trId: environment === "mock-domestic" ? "ka10099" : "usa10099", query, results }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ category: isDomestic(environment) ? "domestic" : "overseas", trId: isDomestic(environment) ? "ka10099" : "usa10099", query, results }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ message: error instanceof Error ? error.message : "종목 검색 중 오류가 발생했습니다." }, { status: 502, headers: { "Cache-Control": "no-store" } });
   }

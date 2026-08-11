@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMockAccessToken, MOCK_DOMAIN, type MockEnvironment } from "../../kiwoom.server";
+import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment } from "../../kiwoom.server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +25,15 @@ const absolute = (value: unknown) => Math.abs(numeric(value));
 
 export async function GET(request: NextRequest) {
   const environment = request.nextUrl.searchParams.get("environment");
-  if (environment !== "mock-domestic" && environment !== "mock-overseas") return NextResponse.json({ message: "지원하지 않는 투자 환경입니다." }, { status: 400 });
-  const domestic = environment === "mock-domestic";
+  if (!isInvestmentEnvironment(environment)) return NextResponse.json({ message: "지원하지 않는 투자 환경입니다." }, { status: 400 });
+  const domestic = isDomestic(environment);
   const configs = domestic ? domesticConfig : overseasConfig;
 
   try {
-    const token = await getMockAccessToken(environment as MockEnvironment);
+    const token = await getAccessToken(environment);
+    const domain = getApiDomain(environment);
     const entries = await Promise.all((Object.entries(configs) as [RankingKind, typeof configs[RankingKind]][]).map(async ([kind, config]) => {
-      const response = await fetch(`${MOCK_DOMAIN}${config.path}`, { method: "POST", headers: { "Content-Type": "application/json;charset=UTF-8", "api-id": config.trId, authorization: `Bearer ${token}` }, body: JSON.stringify(config.body), cache: "no-store" });
+      const response = await fetch(`${domain}${config.path}`, { method: "POST", headers: { "Content-Type": "application/json;charset=UTF-8", "api-id": config.trId, authorization: `Bearer ${token}` }, body: JSON.stringify(config.body), cache: "no-store" });
       const body = await response.json() as KiwoomBody;
       if (!response.ok || Number(body.return_code ?? 0) !== 0) throw new Error(body.return_msg || `${config.trId} 순위를 불러오지 못했습니다.`);
       const rows = Array.isArray(body[config.list]) ? body[config.list] as Record<string, unknown>[] : [];
