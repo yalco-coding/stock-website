@@ -33,3 +33,24 @@ test("contains the Kiwoom Ledger account dashboard", async () => {
   assert.doesNotMatch(page + dashboard + route, /KRA_(?:REAL|MOCK).*SECRET[^\n]*=/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
+
+test("protects pages and APIs with a signed, expiring secure session", async () => {
+  const [proxy, auth, login, loginForm] = await Promise.all([
+    readFile(new URL("../proxy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/auth.server.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/login/LoginForm.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(proxy, /isValidSession/);
+  assert.match(proxy, /status: 401/);
+  assert.match(auth, /HMAC/);
+  assert.match(auth, /kiwoom-ledger:session:v1/);
+  assert.match(auth, /SESSION_TTL_SECONDS = 8 \* 60 \* 60/);
+  assert.match(login, /MAX_ATTEMPTS = 5/);
+  assert.match(login, /httpOnly: true/);
+  assert.match(login, /sameSite: "strict"/);
+  assert.match(login, /secure: process\.env\.NODE_ENV === "production"/);
+  assert.match(login, /status: 503/);
+  assert.match(loginForm, /content-type/);
+  assert.doesNotMatch(proxy + auth + login, /KRA_(?:REAL|MOCK).*SECRET/);
+});
