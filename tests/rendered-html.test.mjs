@@ -57,3 +57,17 @@ test("protects pages and APIs with a signed, expiring secure session", async () 
   assert.match(loginForm, /content-type/);
   assert.doesNotMatch(proxy + auth + login, /KRA_(?:REAL|MOCK).*SECRET/);
 });
+
+test("stores and manages a browser-local watchlist", async () => {
+  const [dashboard, watchlist] = await Promise.all([
+    readFile(new URL("../app/ui/Dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/Watchlist.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(watchlist, /window\.localStorage/);
+  assert.match(watchlist, /kiwoom-ledger:watchlist:v1/);
+  assert.match(watchlist, /관심종목 추가/);
+  assert.match(watchlist, /관심종목 삭제/);
+  assert.match(dashboard, /<WatchlistButton/);
+  assert.match(dashboard, /<WatchlistView/);
+  assert.match(dashboard, />관심종목</);
+});
