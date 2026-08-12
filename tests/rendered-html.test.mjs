@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { accountCsvFilename, createAccountCsv } from "../app/ui/accountCsv.ts";
 
 test("contains the Kiwoom Ledger account dashboard", async () => {
   const [page, dashboard, route, quantityControls, packageJson] = await Promise.all([
@@ -39,6 +40,38 @@ test("contains the Kiwoom Ledger account dashboard", async () => {
   assert.match(dashboard, /USD 예수금/);
   assert.doesNotMatch(page + dashboard + route, /KRA_(?:REAL|MOCK).*SECRET[^\n]*=/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+});
+
+test("exports account positions and profit/loss as UTF-8 CSV", () => {
+  const csv = createAccountCsv([{
+    code: "005930",
+    name: '삼성전자, "우"',
+    market: "KRX",
+    quantity: 2,
+    averagePrice: 70000,
+    currentPrice: 75000,
+    purchaseAmount: 140000,
+    evaluationAmount: 150000,
+    profitLoss: 10000,
+    returnRate: 7.14,
+  }, {
+    code: "=FORMULA",
+    name: "+위험한 이름",
+    quantity: 1,
+    averagePrice: 1,
+    currentPrice: 1,
+    purchaseAmount: 1,
+    evaluationAmount: 1,
+    profitLoss: 0,
+    returnRate: 0,
+  }], "KRW");
+
+  assert.ok(csv.startsWith("\uFEFF"), "CSV includes a UTF-8 BOM");
+  assert.match(csv, /"삼성전자, ""우"""/);
+  assert.match(csv, /"'=FORMULA","'\+위험한 이름"/);
+  assert.match(csv, /"평가손익","수익률\(%\)"/);
+  assert.ok(csv.includes("\r\n"));
+  assert.equal(accountCsvFilename("mock-domestic", "2026-08-12T01:02:03.000Z"), "account-positions-mock-domestic-2026-08-12-01-02-03.csv");
 });
 
 test("protects pages and APIs with a signed, expiring secure session", async () => {
