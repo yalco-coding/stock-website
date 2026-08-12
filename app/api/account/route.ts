@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment } from "../kiwoom.server";
+import { anonymizeStock } from "../../stock-anonymizer.server";
 
 export const dynamic = "force-dynamic";
 const num = (value: unknown) => Number(String(value ?? "0").replace(/,/g, "")) || 0;
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     const positions = domestic
       ? (body.acnt_evlt_remn_indv_tot ?? []).map((p) => ({ code: String(p.stk_cd ?? "").replace(/^[AJQ]/, ""), name: String(p.stk_nm ?? ""), market: "KRX", marketCode: "KRX", quantity: num(p.rmnd_qty), availableQuantity: num(p.trde_able_qty), averagePrice: num(p.pur_pric), currentPrice: Math.abs(num(p.cur_prc)), purchaseAmount: num(p.pur_amt), evaluationAmount: num(p.evlt_amt), profitLoss: num(p.evltv_prft), returnRate: num(p.prft_rt) }))
       : (body.result_list ?? []).map((p) => ({ code: String(p.stk_cd ?? ""), name: String(p.frgn_stk_nm ?? ""), market: String(p.stex_nm ?? "미국"), marketCode: "", quantity: num(p.poss_qty), availableQuantity: num(p.sell_alowq), averagePrice: num(p.frgn_stk_book_uv), currentPrice: num(p.now_pric), purchaseAmount: num(p.frgn_stk_book_amt), evaluationAmount: num(p.evlt_amt), profitLoss: num(p.pl_amt), returnRate: num(p.pl_rt) }));
+    const anonymizedPositions = positions.map((position) => anonymizeStock(position, domestic));
     let cash;
     if (!domestic) {
       const cashResponse = await fetch(`${domain}/api/us/acnt`, { method: "POST", headers: { ...apiHeaders, "api-id": "ust21110" }, body: "{}", cache: "no-store" });
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
         usdOrderable: num(usd?.fc_ord_alowa),
       };
     }
-    return NextResponse.json({ environment, currency: domestic ? "KRW" : "USD", trId: domestic ? trId : `${trId}, ust21110`, totalPurchase: num(domestic ? body.tot_pur_amt : body.tot_prch_amt), totalEvaluation: num(body.tot_evlt_amt), totalProfitLoss: num(domestic ? body.tot_evlt_pl : body.tot_pl_amt), totalReturnRate: num(domestic ? body.tot_prft_rt : body.tot_pl_rt), estimatedAssets: domestic ? num(body.prsm_dpst_aset_amt) : undefined, cash, positions, fetchedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ environment, currency: domestic ? "KRW" : "USD", trId: domestic ? trId : `${trId}, ust21110`, totalPurchase: num(domestic ? body.tot_pur_amt : body.tot_prch_amt), totalEvaluation: num(body.tot_evlt_amt), totalProfitLoss: num(domestic ? body.tot_evlt_pl : body.tot_pl_amt), totalReturnRate: num(domestic ? body.tot_prft_rt : body.tot_pl_rt), estimatedAssets: domestic ? num(body.prsm_dpst_aset_amt) : undefined, cash, positions: anonymizedPositions, fetchedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "계좌 조회 중 오류가 발생했습니다.";
     return NextResponse.json({ message }, { status: 502, headers: { "Cache-Control": "no-store" } });

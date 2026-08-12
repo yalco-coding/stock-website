@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment } from "../../kiwoom.server";
+import { anonymizeStock } from "../../../stock-anonymizer.server";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
       const body = await response.json() as KiwoomBody;
       if (!response.ok || Number(body.return_code ?? 0) !== 0) throw new Error(body.return_msg || `${config.trId} 순위를 불러오지 못했습니다.`);
       const rows = Array.isArray(body[config.list]) ? body[config.list] as Record<string, unknown>[] : [];
-      return [kind, { trId: config.trId, items: rows.slice(0, 5).map((row, index) => ({
+      return [kind, { trId: config.trId, items: rows.slice(0, 5).map((row, index) => anonymizeStock({
         rank: numeric(row.rank ?? row.now_rank ?? row.bigd_rank) || index + 1,
         code: String(row.stk_cd ?? "").replace(/^A/, ""),
         name: String(row.stk_nm ?? ""),
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
         currentPrice: absolute(row.cur_prc ?? row.curr_pric ?? row.past_curr_prc),
         changeRate: numeric(row.flu_rt ?? row.diff_rate_for_prev ?? row.prev_base_chgr),
         value: absolute(kind === "trading-value" ? row.trde_prica : kind === "volume" ? (row.trde_qty ?? row.acc_trde_qty) : 0),
-      })) }];
+      }, domestic)) }];
     }));
     return NextResponse.json({ environment, currency: domestic ? "KRW" : "USD", rankings: Object.fromEntries(entries), fetchedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
