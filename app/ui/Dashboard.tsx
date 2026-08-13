@@ -2,13 +2,14 @@
 
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, BarChart3, BriefcaseBusiness, Building2, ChevronRight, CircleDollarSign, Clock3, Flame, Globe2, Landmark, Menu, RefreshCw, Search, ShieldCheck, Star, TrendingUp, Trophy, WalletCards, X } from "lucide-react";
+import { AlertCircle, BarChart3, Bell, BriefcaseBusiness, Building2, ChevronRight, CircleDollarSign, Clock3, Flame, Globe2, Landmark, Menu, RefreshCw, Search, ShieldCheck, Star, TrendingUp, Trophy, WalletCards, X } from "lucide-react";
 import { QueryProvider } from "./QueryProvider";
 import { StockTradePanel, type TradableStock } from "./StockTradePanel";
 import { useWatchlist, WatchlistButton, WatchlistView } from "./Watchlist";
 import { HoldingsTable, type HoldingPosition } from "./HoldingsTable";
 import { RecentStockSearches } from "./RecentStockSearches";
 import { AccountCsvDownload } from "./AccountCsvDownload";
+import { TelegramSettings } from "./TelegramSettings";
 
 type Environment = "real-domestic" | "real-overseas" | "mock-domestic" | "mock-overseas";
 type Position = HoldingPosition;
@@ -58,7 +59,7 @@ async function fetchRankings(environment: Environment): Promise<RankingsData> {
 function DashboardContent() {
   const [environment, setEnvironment] = useState<Environment>(() => isUsRegularMarketOpen() ? "mock-overseas" : "mock-domestic");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [view, setView] = useState<"account" | "search" | "rankings" | "watchlist">("account");
+  const [view, setView] = useState<"account" | "search" | "rankings" | "watchlist" | "telegram">("account");
   const watchlist = useWatchlist();
   const [selectedTrade, setSelectedTrade] = useState<{ stock: Stock; mode: "buy" | "sell"; holding?: { quantity: number; availableQuantity: number } } | null>(null);
   const query = useQuery({ queryKey: ["account", environment], queryFn: () => fetchAccount(environment), enabled: view === "account" });
@@ -82,11 +83,13 @@ function DashboardContent() {
         <button onClick={() => { setView("search"); setMenuOpen(false); }} className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold ${view === "search" ? "bg-[#e2ece6] text-[#173f31]" : "text-slate-600 hover:bg-slate-100"}`}><Search size={18}/><span className="flex-1">종목 검색</span>{view === "search" && <ChevronRight size={16}/>}</button>
         <button onClick={() => { setView("rankings"); setMenuOpen(false); }} className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold ${view === "rankings" ? "bg-[#e2ece6] text-[#173f31]" : "text-slate-600 hover:bg-slate-100"}`}><Trophy size={18}/><span className="flex-1">순위</span>{view === "rankings" && <ChevronRight size={16}/>}</button>
         <button onClick={() => { setView("watchlist"); setMenuOpen(false); }} className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold ${view === "watchlist" ? "bg-[#e2ece6] text-[#173f31]" : "text-slate-600 hover:bg-slate-100"}`}><Star size={18}/><span className="flex-1">관심종목</span>{view === "watchlist" && <ChevronRight size={16}/>}</button>
+        <p className="mb-2 mt-7 px-3 text-[10px] font-bold tracking-[.16em] text-slate-400">SETTINGS</p>
+        <button onClick={() => { setView("telegram"); setMenuOpen(false); }} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold ${view === "telegram" ? "bg-[#e2ece6] text-[#173f31]" : "text-slate-600 hover:bg-slate-100"}`}><Bell size={18}/><span className="flex-1">텔레그램 알림</span>{view === "telegram" && <ChevronRight size={16}/>}</button>
         <div className="mt-auto rounded-xl border border-[#d8e1dc] bg-white p-4"><div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-800"><ShieldCheck size={16}/>보안 연결</div><p className="text-[11px] leading-5 text-slate-500">인증정보와 접근 토큰은 서버에서만 처리됩니다.</p></div>
       </aside>
       {menuOpen && <button className="fixed inset-0 z-40 bg-black/25 md:hidden" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기"/>}
       <section className="min-w-0 flex-1 p-4 md:p-8 lg:p-10">
-        {view === "search" ? <StockSearch key={environment} environment={environment} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })} watchlist={watchlist}/> : view === "rankings" ? <RankingView environment={environment} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })} watchlist={watchlist}/> : view === "watchlist" ? <WatchlistView items={watchlist.items} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })} onRemove={watchlist.toggle}/> : <>
+        {view === "search" ? <StockSearch key={environment} environment={environment} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })} watchlist={watchlist}/> : view === "rankings" ? <RankingView environment={environment} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })} watchlist={watchlist}/> : view === "watchlist" ? <WatchlistView items={watchlist.items} onSelect={(stock) => setSelectedTrade({ stock, mode: "buy" })} onRemove={watchlist.toggle}/> : view === "telegram" ? <TelegramSettings/> : <>
         <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-semibold text-emerald-800"><span className="h-2 w-2 rounded-full bg-emerald-500"/>{label}</div><h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">계좌 현황</h1><p className="mt-2 text-sm text-slate-500">보유 자산의 평가 현황과 수익을 확인하세요.</p></div><button onClick={() => query.refetch()} disabled={query.isFetching} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#cad5cf] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"><RefreshCw size={16} className={query.isFetching ? "animate-spin" : ""}/>{query.isFetching ? "새로고침 중" : "새로고침"}</button></div>
         {query.isLoading && <Loading/>}
         {query.isError && <ErrorState message={query.error.message} retry={() => query.refetch()}/>} 

@@ -1,3 +1,5 @@
+import { loggedFetch as fetch } from "../external-api-logger.server";
+
 export type InvestmentEnvironment = "real-domestic" | "real-overseas" | "mock-domestic" | "mock-overseas";
 export type MockEnvironment = Extract<InvestmentEnvironment, `mock-${string}`>;
 type TokenEntry = { value: string; expiresAt: number };
@@ -13,6 +15,11 @@ export function isInvestmentEnvironment(value: string | null): value is Investme
 
 export function isDomestic(environment: InvestmentEnvironment) {
   return environment.endsWith("domestic");
+}
+
+export function normalizeDomesticStockCode(code: string): string {
+  const normalized = code.trim().toUpperCase();
+  return normalized.match(/^([0-9]{6})(?:_[A-Z0-9]+)?$/)?.[1] ?? normalized;
 }
 
 export function getApiDomain(environment: InvestmentEnvironment) {

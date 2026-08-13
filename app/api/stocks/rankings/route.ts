@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment } from "../../kiwoom.server";
+import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment, normalizeDomesticStockCode } from "../../kiwoom.server";
 import { anonymizeStock } from "../../../stock-anonymizer.server";
+import { loggedFetch as fetch } from "../../../external-api-logger.server";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +39,16 @@ export async function GET(request: NextRequest) {
       const body = await response.json() as KiwoomBody;
       if (!response.ok || Number(body.return_code ?? 0) !== 0) throw new Error(body.return_msg || `${config.trId} 순위를 불러오지 못했습니다.`);
       const rows = Array.isArray(body[config.list]) ? body[config.list] as Record<string, unknown>[] : [];
-      return [kind, { trId: config.trId, items: rows.slice(0, 5).map((row, index) => anonymizeStock({
+      const seenCodes = new Set<string>();
+      const uniqueRows = rows.filter((row) => {
+        const code = String(row.stk_cd ?? "").trim();
+        if (!code || seenCodes.has(code)) return false;
+        seenCodes.add(code);
+        return true;
+      });
+      return [kind, { trId: config.trId, items: uniqueRows.slice(0, 5).map((row, index) => anonymizeStock({
         rank: numeric(row.rank ?? row.now_rank ?? row.bigd_rank) || index + 1,
-        code: String(row.stk_cd ?? "").replace(/^A/, ""),
+        code: domestic ? normalizeDomesticStockCode(String(row.stk_cd ?? "").replace(/^A/, "")) : String(row.stk_cd ?? ""),
         name: String(row.stk_nm ?? ""),
         englishName: domestic ? undefined : String(row.stk_enm ?? "") || undefined,
         market: domestic ? "KRX" : ({ ND: "NASDAQ", NY: "NYSE", NA: "AMEX" }[String(row.stex_tp)] ?? "미국"),

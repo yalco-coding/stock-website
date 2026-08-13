@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment, resolveUsMarket } from "../../kiwoom.server";
+import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment, normalizeDomesticStockCode, resolveUsMarket } from "../../kiwoom.server";
 import { anonymizeStock } from "../../../stock-anonymizer.server";
+import { loggedFetch as fetch } from "../../../external-api-logger.server";
 
 export const dynamic = "force-dynamic";
 const num = (value: unknown) => Math.abs(Number(String(value ?? "0").replace(/,/g, "")) || 0);
@@ -8,11 +9,12 @@ const signedNum = (value: unknown) => Number(String(value ?? "0").replace(/,/g, 
 
 export async function GET(request: NextRequest) {
   const environment = request.nextUrl.searchParams.get("environment");
-  const code = request.nextUrl.searchParams.get("code")?.trim() ?? "";
+  let code = request.nextUrl.searchParams.get("code")?.trim() ?? "";
   let marketCode = request.nextUrl.searchParams.get("marketCode")?.trim() ?? "";
   if (!isInvestmentEnvironment(environment)) return NextResponse.json({ message: "지원하지 않는 투자 환경입니다." }, { status: 400 });
   if (!code) return NextResponse.json({ message: "종목코드가 필요합니다." }, { status: 400 });
   const domestic = isDomestic(environment);
+  if (domestic) code = normalizeDomesticStockCode(code);
   try {
     const token = await getAccessToken(environment);
     if (!domestic && !["NA", "ND", "NY"].includes(marketCode)) marketCode = await resolveUsMarket(code, token, environment);

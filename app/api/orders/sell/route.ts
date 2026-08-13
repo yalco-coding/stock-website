@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMockAccessToken, MOCK_DOMAIN, resolveUsMarket, type MockEnvironment } from "../../kiwoom.server";
+import { getMockAccessToken, MOCK_DOMAIN, normalizeDomesticStockCode, resolveUsMarket, type MockEnvironment } from "../../kiwoom.server";
+import { getPositionQuantity, startOrderMonitor } from "../order-monitor.server";
+import { loggedFetch as fetch } from "../../../external-api-logger.server";
 
 export const dynamic = "force-dynamic";
 type SellRequest = { environment?: string; requestId?: string; code?: string; marketCode?: string; quantity?: number; orderType?: "limit" | "market"; price?: number };
-type OrderResult = { orderNo: string; message: string; trId: string; marketCode: string; availableQuantity: number };
+type OrderResult = { orderNo: string; message: string; trId: string; marketCode: string; availableQuantity: number; baselineQuantity: number };
 const orders = new Map<string, { createdAt: number; result: Promise<OrderResult> }>();
 const num = (value: unknown) => Number(String(value ?? "0").replace(/,/g, "")) || 0;
 class OrderRejectedError extends Error {}
@@ -26,6 +28,7 @@ async function placeOrder(body: Required<Pick<SellRequest, "environment" | "requ
   const token = await getMockAccessToken(environment);
   const marketCode = domestic ? "KRX" : ["NA", "ND", "NY"].includes(body.marketCode ?? "") ? body.marketCode! : await resolveUsMarket(body.code, token);
   const availableQuantity = await verifyAvailable(environment, body.code, marketCode, token);
+  const baselineQuantity = await getPositionQuantity(environment, body.code);
   if (availableQuantity < body.quantity) throw new OrderRejectedError(`매도 가능 수량은 ${availableQuantity}주입니다. 잔고를 새로고침한 뒤 다시 시도해 주세요.`);
   const trId = domestic ? "kt10001" : "ust20001";
   const overseasOrderPrice = body.orderType === "limit" ? Number(body.price) < 1 ? Number(body.price).toFixed(4) : Number(body.price).toFixed(2) : "";
@@ -34,7 +37,7 @@ async function placeOrder(body: Required<Pick<SellRequest, "environment" | "requ
   const result = await response.json() as { ord_no?: string; return_code?: number; return_msg?: string };
   if (response.ok && (Number(result.return_code ?? 0) !== 0 || !result.ord_no)) throw new OrderRejectedError(result.return_msg || "키움에서 매도 주문을 거절했습니다.");
   if (!response.ok) throw new Error(result.return_msg || "키움 주문 서버에 연결하지 못했습니다.");
-  return { orderNo: result.ord_no!, message: result.return_msg || "매도 주문이 접수되었습니다.", trId, marketCode, availableQuantity };
+  return { orderNo: result.ord_no!, message: result.return_msg || "매도 주문이 접수되었습니다.", trId, marketCode, availableQuantity, baselineQuantity };
 }
 
 export async function POST(request: NextRequest) {
@@ -44,6 +47,7 @@ export async function POST(request: NextRequest) {
   if (!domestic && body.environment !== "mock-overseas") return NextResponse.json({ message: "실투자 주문은 비활성화되어 있습니다." }, { status: 403 });
   if (!body.requestId || !/^[0-9a-f-]{36}$/i.test(body.requestId)) return NextResponse.json({ message: "주문 확인 정보가 유효하지 않습니다." }, { status: 400 });
   if (!body.code || !/^([0-9A-Z._-]{1,12})$/i.test(body.code)) return NextResponse.json({ message: "종목코드가 유효하지 않습니다." }, { status: 400 });
+  if (domestic) body.code = normalizeDomesticStockCode(body.code);
   if (!Number.isSafeInteger(body.quantity) || Number(body.quantity) < 1) return NextResponse.json({ message: "주문수량은 1주 이상의 정수여야 합니다." }, { status: 400 });
   if (!body.orderType || !["limit", "market"].includes(body.orderType)) return NextResponse.json({ message: "지원하지 않는 주문 유형입니다." }, { status: 400 });
   if (body.orderType === "limit" && (!Number.isFinite(body.price) || Number(body.price) <= 0)) return NextResponse.json({ message: "지정가 주문에는 유효한 주문가격이 필요합니다." }, { status: 400 });
@@ -53,6 +57,10 @@ export async function POST(request: NextRequest) {
   let entry = orders.get(key);
   const duplicatePrevented = !!entry;
   if (!entry) { entry = { createdAt: now, result: placeOrder(body as Parameters<typeof placeOrder>[0]) }; orders.set(key, entry); }
-  try { return NextResponse.json({ ...await entry.result, duplicatePrevented }, { headers: { "Cache-Control": "no-store" } }); }
+  try {
+    const result = await entry.result;
+    startOrderMonitor({ environment: body.environment as MockEnvironment, side: "sell", orderNo: result.orderNo, code: body.code!, marketCode: result.marketCode, orderedQuantity: body.quantity!, baselineQuantity: result.baselineQuantity });
+    return NextResponse.json({ ...result, duplicatePrevented }, { headers: { "Cache-Control": "no-store" } });
+  }
   catch (error) { return NextResponse.json({ message: error instanceof Error ? error.message : "주문 접수 중 오류가 발생했습니다." }, { status: error instanceof OrderRejectedError ? 422 : 502, headers: { "Cache-Control": "no-store" } }); }
 }

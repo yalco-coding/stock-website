@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, isHttpsRequest, safeReturnPath, SESSION_COOKIE, SESSION_TTL_SECONDS, verifyPassword } from "../../../auth.server";
+import { sendTelegramNotification } from "../../../telegram.server";
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   attempts.delete(id);
+  await sendTelegramNotification("login", `🔐 로그인 성공\n시간: ${new Date(now).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`);
   const response = NextResponse.json({ redirectTo: safeReturnPath(body.next) }, { headers: { "Cache-Control": "no-store" } });
   response.cookies.set(SESSION_COOKIE, sessionToken, {
     httpOnly: true,

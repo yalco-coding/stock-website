@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment } from "../kiwoom.server";
 import { anonymizeStock } from "../../stock-anonymizer.server";
+import { loggedFetch as fetch } from "../../external-api-logger.server";
 
 export const dynamic = "force-dynamic";
 const num = (value: unknown) => Number(String(value ?? "0").replace(/,/g, "")) || 0;

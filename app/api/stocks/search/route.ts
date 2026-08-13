@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment, type InvestmentEnvironment } from "../../kiwoom.server";
+import { getAccessToken, getApiDomain, isDomestic, isInvestmentEnvironment, normalizeDomesticStockCode, type InvestmentEnvironment } from "../../kiwoom.server";
 import { anonymizeStock } from "../../../stock-anonymizer.server";
+import { loggedFetch as fetch } from "../../../external-api-logger.server";
 
 export const dynamic = "force-dynamic";
 type Stock = { code: string; name: string; englishName?: string; market: string; marketCode: string; industry?: string; isEtf?: boolean };
@@ -20,7 +21,7 @@ async function requestList(environment: InvestmentEnvironment, token: string, ma
   const body = await response.json() as { return_code?: number; return_msg?: string; list?: Record<string, unknown>[] };
   if (!response.ok || Number(body.return_code ?? 0) !== 0) throw new Error(body.return_msg || "종목 목록을 불러오지 못했습니다.");
   return (body.list ?? []).map((item): Stock => domestic ? {
-    code: String(item.code ?? ""), name: String(item.name ?? ""), market: String(item.marketName ?? ""), marketCode: "KRX", industry: String(item.upName ?? "") || undefined, isEtf: marketType === "8",
+    code: normalizeDomesticStockCode(String(item.code ?? "")), name: String(item.name ?? ""), market: String(item.marketName ?? ""), marketCode: "KRX", industry: String(item.upName ?? "") || undefined, isEtf: marketType === "8",
   } : {
     code: String(item.stk_cd ?? ""), name: String(item.stk_nm ?? ""), englishName: String(item.stk_enm ?? "") || undefined, market: String(item.mkgb ?? ""), marketCode: String(item.stex_tp ?? ""), industry: String(item.upgb ?? "") || undefined, isEtf: item.isEtf === "Y",
   });
