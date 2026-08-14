@@ -99,6 +99,15 @@ test("protects pages and APIs with a signed, expiring secure session", async () 
   assert.doesNotMatch(proxy + auth + login, /KRA_(?:REAL|MOCK).*SECRET/);
 });
 
+test("starts mock strategy automation without a server mode variable", async () => {
+  const [engine, exampleEnvironment] = await Promise.all([
+    readFile(new URL("../app/strategy-engine/engine.server.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+  ]);
+  assert.match(engine, /readonly mode = "mock" as const/);
+  assert.doesNotMatch(engine + exampleEnvironment, /STRATEGY_ENGINE_MODE/);
+});
+
 test("stores and manages a browser-local watchlist", async () => {
   const [dashboard, watchlist] = await Promise.all([
     readFile(new URL("../app/ui/Dashboard.tsx", import.meta.url), "utf8"),

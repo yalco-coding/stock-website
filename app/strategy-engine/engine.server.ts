@@ -27,20 +27,12 @@ import {
 import type { PositionGeneration, PriceSnapshot } from "./types";
 import { normalizeRealtimePrice, parseRealtimeMessage, type RealtimeEntry, type RealtimeMessage } from "./realtime-events";
 
-export type StrategyEngineMode = "off" | "shadow" | "mock";
 const MAX_SUBSCRIPTIONS = 200;
 const MAX_BUFFERED_EVENTS = 5_000;
 const REST_SYNC_INTERVAL_MS = 15_000;
 const DEAD_CROSS_INTERVAL_MS = 60_000;
 const LEASE_LIFETIME_MS = 30_000;
 const WS_DOMAIN = "wss://mockapi.kiwoom.com:10000";
-
-function configuredMode(): StrategyEngineMode {
-  const value = process.env.STRATEGY_ENGINE_MODE ?? "off";
-  if (value === "shadow" || value === "mock" || value === "off") return value;
-  console.error(`지원하지 않는 STRATEGY_ENGINE_MODE=${value} 값이므로 자동매도를 끕니다.`);
-  return "off";
-}
 
 function num(value: unknown) {
   const parsed = Number(String(value ?? "").replace(/,/g, ""));
@@ -363,7 +355,7 @@ class RealtimeSession {
 }
 
 export class StrategyEngine {
-  readonly mode = configuredMode();
+  readonly mode = "mock" as const;
   private readonly owner = `${process.pid}:${randomUUID()}`;
   private readonly sessions = new Map<MockEnvironment, RealtimeSession>();
   private leaseTimer: ReturnType<typeof setInterval> | null = null;
@@ -377,10 +369,6 @@ export class StrategyEngine {
   async start() {
     if (this.started) return;
     this.started = true;
-    if (this.mode === "off") {
-      for (const environment of ["mock-domestic", "mock-overseas"] as const) setEngineHealth(environment, "off", "STRATEGY_ENGINE_MODE=off");
-      return;
-    }
     if (!acquireEngineLease("strategy-engine", this.owner, LEASE_LIFETIME_MS)) {
       for (const environment of ["mock-domestic", "mock-overseas"] as const) setEngineHealth(environment, "stopped", "다른 프로세스가 전략 실행기를 사용 중입니다.");
       return;
@@ -568,8 +556,7 @@ export class StrategyEngine {
   }
 
   private async handleSignals(position: PositionGeneration, signals: NonNullable<ReturnType<typeof mergeStrategySignals>>) {
-    recordStrategyEvent(position.environment, position.positionKey, signals, this.mode === "mock" ? "mock" : "shadow");
-    if (this.mode !== "mock") return;
+    recordStrategyEvent(position.environment, position.positionKey, signals, "mock");
     try {
       await submitStrategySignals({ environment: position.environment, code: position.code, marketCode: position.marketCode, quantity: position.availableQuantity, signals, canSubmit: () => this.started && this.readyEnvironments.has(position.environment) });
     } catch (error) {
