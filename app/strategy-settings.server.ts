@@ -124,10 +124,20 @@ export type StrategySettingsPatch = {
   expectedRevision: number;
 };
 
+export type StrategySettingsReplacement = {
+  settings: StrategySettings;
+  expectedRevision: number;
+};
+
 export function isValidStrategySettingsPatch(value: unknown): value is StrategySettingsPatch {
   if (!isRecord(value) || !isRecord(value.patch)) return false;
   return ["slTp", "trailingStop", "deadCross"].includes(String(value.strategy)) &&
     ["domestic", "overseas"].includes(String(value.market)) &&
+    Number.isSafeInteger(value.expectedRevision) && Number(value.expectedRevision) >= 0;
+}
+
+export function isValidStrategySettingsReplacement(value: unknown): value is StrategySettingsReplacement {
+  return isRecord(value) && isValidStrategySettings(value.settings) &&
     Number.isSafeInteger(value.expectedRevision) && Number(value.expectedRevision) >= 0;
 }
 
@@ -141,6 +151,18 @@ export async function patchStrategySettings(input: StrategySettingsPatch) {
     Object.assign(next.strategies[input.strategy][input.market], input.patch);
     next.revision += 1;
     if (!isValidStrategySettings(next)) throw new Error("전략 설정값을 확인해 주세요.");
+    await saveStrategySettings(next);
+    return next;
+  });
+}
+
+export async function replaceStrategySettings(input: StrategySettingsReplacement) {
+  return withSettingsWriteLock(async () => {
+    const current = (await readStoredSettings()).settings;
+    if (current.revision !== input.expectedRevision) throw new StrategySettingsRevisionConflict(current);
+    const next = structuredClone(input.settings);
+    next.revision = current.revision + 1;
+    if (!isValidStrategySettings(next)) throw new Error("가져올 전략 설정값을 확인해 주세요.");
     await saveStrategySettings(next);
     return next;
   });

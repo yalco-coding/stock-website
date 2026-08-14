@@ -46,6 +46,53 @@ test("version 1 settings migrate to version 2 and stale revisions are rejected",
   }
 });
 
+test("full strategy settings can be copied to another server without reusing the source revision", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "strategy-settings-import-"));
+  const settingsPath = path.join(directory, "settings.json");
+  const current = structuredClone(DEFAULT_STRATEGY_SETTINGS);
+  current.revision = 8;
+  await writeFile(settingsPath, JSON.stringify(current), "utf8");
+  process.env.STRATEGY_SETTINGS_PATH = settingsPath;
+  const server = await import(`../app/strategy-settings.server.ts?import-test=${Date.now()}`);
+  try {
+    const copied = structuredClone(DEFAULT_STRATEGY_SETTINGS);
+    copied.revision = 42;
+    copied.strategies.slTp.domestic.enabled = true;
+    copied.strategies.slTp.domestic.takeProfitPercent = 9;
+    const imported = await server.replaceStrategySettings({ settings: copied, expectedRevision: 8 });
+    assert.equal(imported.revision, 9);
+    assert.equal(imported.strategies.slTp.domestic.enabled, true);
+    assert.equal(imported.strategies.slTp.domestic.takeProfitPercent, 9);
+    assert.equal(JSON.parse(await readFile(settingsPath, "utf8")).revision, 9);
+    await assert.rejects(
+      server.replaceStrategySettings({ settings: copied, expectedRevision: 8 }),
+      (error) => error instanceof server.StrategySettingsRevisionConflict && error.settings.revision === 9,
+    );
+  } finally {
+    delete process.env.STRATEGY_SETTINGS_PATH;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("strategy settings transfer UI copies and pastes the complete JSON through the shared endpoint", async () => {
+  const [dashboard, transfer, route, server] = await Promise.all([
+    readFile(new URL("../app/ui/Dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/StrategySettingsTransfer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/strategies/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/strategy-settings.server.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(dashboard, />전략 설정 옮기기</);
+  assert.match(dashboard, /<StrategySettingsTransfer/);
+  assert.match(transfer, /전체 전략 설정 JSON/);
+  assert.match(transfer, /navigator\.clipboard/);
+  assert.match(transfer, /method: "PUT"/);
+  assert.match(transfer, /window\.confirm/);
+  assert.match(transfer, /인증정보와 텔레그램 설정은 포함되지 않습니다/);
+  assert.match(route, /export async function PUT/);
+  assert.match(route, /isValidStrategySettingsReplacement/);
+  assert.match(server, /replaceStrategySettings/);
+});
+
 test("dead cross UI uses documented chart intervals and shared strategy controls", async () => {
   const [dashboard, deadCross, server] = await Promise.all([
     readFile(new URL("../app/ui/Dashboard.tsx", import.meta.url), "utf8"),

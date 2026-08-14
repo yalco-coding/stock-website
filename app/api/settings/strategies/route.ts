@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStrategySettings, isValidStrategySettingsPatch, patchStrategySettings, StrategySettingsRevisionConflict } from "../../../strategy-settings.server";
+import { getStrategySettings, isValidStrategySettingsPatch, isValidStrategySettingsReplacement, patchStrategySettings, replaceStrategySettings, StrategySettingsRevisionConflict } from "../../../strategy-settings.server";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +24,26 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: error.message, settings: error.settings, revision: error.settings.revision }, { status: 409, headers: { "Cache-Control": "no-store" } });
     }
     return NextResponse.json({ message: error instanceof Error ? error.message : "전략 설정을 저장하지 못했습니다." }, { status: 400 });
+  }
+}
+
+export async function PUT(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ message: "붙여넣은 내용이 올바른 JSON이 아닙니다." }, { status: 400 });
+  }
+  if (!isValidStrategySettingsReplacement(body)) {
+    return NextResponse.json({ message: "가져올 전략 설정 JSON의 형식을 확인해 주세요." }, { status: 400 });
+  }
+  try {
+    const settings = await replaceStrategySettings(body);
+    return NextResponse.json({ settings, revision: settings.revision }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (error instanceof StrategySettingsRevisionConflict) {
+      return NextResponse.json({ message: error.message, settings: error.settings, revision: error.settings.revision }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    }
+    return NextResponse.json({ message: error instanceof Error ? error.message : "전략 설정을 가져오지 못했습니다." }, { status: 400 });
   }
 }
