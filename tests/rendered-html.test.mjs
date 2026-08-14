@@ -10,11 +10,12 @@ test("contains the Kiwoom Ledger account dashboard", async () => {
     readFile(new URL("../app/api/account/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/stocks/search/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/orders/sell/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/strategy-engine/kiwoom-orders.server.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/ui/StockTradePanel.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ui/HoldingsTable.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ui/OrderQuantityControls.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-  ]).then(([page, dashboard, route, searchRoute, sellRoute, panel, holdingsTable, quantityControls, packageJson]) => [page, dashboard + panel + holdingsTable, route + searchRoute + sellRoute, quantityControls, packageJson]);
+  ]).then(([page, dashboard, route, searchRoute, sellRoute, orderAdapter, panel, holdingsTable, quantityControls, packageJson]) => [page, dashboard + panel + holdingsTable, route + searchRoute + sellRoute + orderAdapter, quantityControls, packageJson]);
   assert.match(page, /Kiwoom Ledger/);
   assert.match(dashboard, /계좌 현황/);
   assert.match(dashboard, /국내 모의/);

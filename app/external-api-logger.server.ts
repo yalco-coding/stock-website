@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 const logPath = path.join(process.cwd(), ".data", "external-api.jsonl");
-const sensitiveKey = /authorization|cookie|token|secret|password|passwd|appkey|api[-_]?key/i;
+const sensitiveKey = /authorization|cookie|token|secret|password|passwd|appkey|api[-_]?key|^(?:account(?:_?number|_?no)?|acnt_?no|9201)$/i;
 const REDACTED = "[REDACTED]";
 
 function redact(value: unknown, key = ""): unknown {

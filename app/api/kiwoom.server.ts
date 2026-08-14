@@ -33,6 +33,11 @@ function credentials(environment: InvestmentEnvironment) {
     : { appkey: process.env.KRA_MOCK_OVERSEAS_APP_KEY, secretkey: process.env.KRA_MOCK_OVERSEAS_APP_SECRET };
 }
 
+export function hasCredentials(environment: InvestmentEnvironment) {
+  const value = credentials(environment);
+  return Boolean(value.appkey && value.secretkey);
+}
+
 export async function getAccessToken(environment: InvestmentEnvironment) {
   const cached = tokenCache.get(environment);
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached.value;
@@ -47,6 +52,10 @@ export async function getAccessToken(environment: InvestmentEnvironment) {
 }
 
 export const getMockAccessToken = (environment: MockEnvironment) => getAccessToken(environment);
+
+export function invalidateAccessToken(environment: InvestmentEnvironment) {
+  tokenCache.delete(environment);
+}
 
 export async function resolveUsMarket(code: string, token: string, environment: InvestmentEnvironment = "mock-overseas") {
   const cacheKey = `${environment}:${code}`;
